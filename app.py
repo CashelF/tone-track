@@ -120,6 +120,24 @@ def write_word_csv(words: List[dict], output_path: Path):
                 ])
 
 
+def read_csv_to_dict(csv_path: Path) -> List[dict]:
+    """
+    Read CSV file and return as list of dictionaries.
+    
+    Args:
+        csv_path: Path to CSV file
+        
+    Returns:
+        List of dictionaries with CSV data
+    """
+    data = []
+    with open(csv_path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(row)
+    return data
+
+
 @app.route('/process_audio', methods=['POST'])
 def process_audio():
     if 'audio' not in request.files:
@@ -185,12 +203,22 @@ def process_audio():
         words_csv_path = output_dir / f"{base_path}_words.csv"
         write_word_csv(aligned_words, words_csv_path)
         
+        # Read CSV data for frontend
+        chunks_csv_data = read_csv_to_dict(chunks_csv_path)
+        words_csv_data = read_csv_to_dict(words_csv_path)
+        
         return jsonify({
             'status': 'success',
-            'chunks_csv': str(chunks_csv_path.absolute()),
-            'words_csv': str(words_csv_path.absolute()),
-            'chunk_count': len(emotion_results),
-            'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
+            'chunks_csv_data': chunks_csv_data,
+            'words_csv_data': words_csv_data,
+            'file_paths': {
+                'chunks_csv': str(chunks_csv_path.absolute()),
+                'words_csv': str(words_csv_path.absolute())
+            },
+            'metadata': {
+                'chunk_count': len(emotion_results),
+                'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
+            }
         }), 200
         
     except Exception as e:
@@ -204,37 +232,75 @@ def process_and_analyze_audio():
     
     This endpoint combines /process_audio and /analyze_chunks functionality.
     It processes the audio, generates CSV files, then immediately calls Gemini
-    to analyze the chunks and returns both results.
+    to analyze the chunks and returns both CSV data and LLM analysis in the response.
+    
+    Accepts either:
+    - File upload: 'audio' file in form data
+    - File path: 'audio_path' parameter pointing to existing WAV file
     
     Expected form data:
-    - audio: Audio file to process
+    - audio (optional): Audio file to upload
+    - audio_path (optional): Path to existing WAV file (relative to outputs/ or absolute)
     - chunk_seconds (optional): Chunk length in seconds (default: 5.0)
     - hop_seconds (optional): Stride between chunks (default: same as chunk_seconds)
     - device (optional): Device to use 'cpu' or 'cuda' (default: 'cpu')
     - api_key (optional): Gemini API key (if not provided, uses GEMINI_API_KEY env var)
     - model (optional): Gemini model name (default: gemini-2.5-flash)
+    
+    Returns:
+    - chunks_csv_data: Array of chunk data objects
+    - words_csv_data: Array of word data objects
+    - analysis: LLM sentiment analysis text
+    - file_paths: Paths to saved files (for reference)
     """
     logger.info("=== /process_and_analyze_audio endpoint called ===")
     logger.debug(f"Request form data: {dict(request.form)}")
     logger.debug(f"Request files: {dict(request.files)}")
     
-    if 'audio' not in request.files:
-        logger.error("No audio file provided")
-        return jsonify({'error': 'No audio file provided'}), 400
+    # Handle file path or file upload
+    input_path = None
     
-    file = request.files['audio']
-    if file.filename == '':
-        logger.error("No file selected")
-        return jsonify({'error': 'No file selected'}), 400
+    # Check for file path first (for frontend convenience)
+    audio_path = request.form.get('audio_path')
+    if audio_path:
+        logger.info(f"Using audio_path parameter: {audio_path}")
+        input_path_obj = Path(audio_path)
+        
+        # Handle relative paths
+        if not input_path_obj.is_absolute():
+            # Try relative to outputs directory
+            path_str = str(input_path_obj).replace('outputs/', '').lstrip('/')
+            input_path_obj = OUTPUT_DIR / path_str
+            
+            # If not found, try relative to project root
+            if not input_path_obj.exists():
+                input_path_obj = Path(__file__).parent / audio_path
+        
+        if not input_path_obj.exists():
+            logger.error(f"Audio file not found: {input_path_obj}")
+            return jsonify({'error': f'Audio file not found: {input_path_obj}'}), 404
+        
+        input_path = str(input_path_obj)
+        logger.info(f"Resolved audio path: {input_path}")
     
-    filename = secure_filename(file.filename)
-    input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    # Ensure output directory exists
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
-    file.save(input_path)
-    logger.info(f"Saved audio file to: {input_path}")
+    # Fall back to file upload
+    elif 'audio' in request.files:
+        file = request.files['audio']
+        if file.filename == '':
+            logger.error("No file selected")
+            return jsonify({'error': 'No file selected'}), 400
+        
+        filename = secure_filename(file.filename)
+        input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Ensure output directory exists
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        
+        file.save(input_path)
+        logger.info(f"Saved uploaded audio file to: {input_path}")
+    else:
+        logger.error("No audio file or audio_path provided")
+        return jsonify({'error': 'Either provide audio file upload or audio_path parameter'}), 400
     
     try:
         input_path_obj = Path(input_path)
@@ -312,38 +378,68 @@ def process_and_analyze_audio():
             analysis_txt_path.write_text(analysis, encoding='utf-8')
             logger.info(f"Saved analysis to: {analysis_txt_path}")
             
+            # Read CSV data for frontend
+            chunks_csv_data = read_csv_to_dict(chunks_csv_path)
+            words_csv_data = read_csv_to_dict(words_csv_path)
+            
             return jsonify({
                 'status': 'success',
-                'chunks_csv': str(chunks_csv_path.absolute()),
-                'words_csv': str(words_csv_path.absolute()),
-                'chunk_count': len(emotion_results),
-                'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0]),
+                'chunks_csv_data': chunks_csv_data,
+                'words_csv_data': words_csv_data,
                 'analysis': analysis,
-                'analysis_txt': str(analysis_txt_path.absolute())
+                'file_paths': {
+                    'chunks_csv': str(chunks_csv_path.absolute()),
+                    'words_csv': str(words_csv_path.absolute()),
+                    'analysis_txt': str(analysis_txt_path.absolute())
+                },
+                'metadata': {
+                    'chunk_count': len(emotion_results),
+                    'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
+                }
             }), 200
             
         except ImportError as e:
             logger.error(f"ImportError in Gemini analysis: {str(e)}")
+            # Read CSV data for frontend
+            chunks_csv_data = read_csv_to_dict(chunks_csv_path)
+            words_csv_data = read_csv_to_dict(words_csv_path)
             # Return CSV results even if Gemini fails
             return jsonify({
                 'status': 'partial_success',
-                'chunks_csv': str(chunks_csv_path.absolute()),
-                'words_csv': str(words_csv_path.absolute()),
-                'chunk_count': len(emotion_results),
-                'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0]),
+                'chunks_csv_data': chunks_csv_data,
+                'words_csv_data': words_csv_data,
+                'analysis': None,
+                'file_paths': {
+                    'chunks_csv': str(chunks_csv_path.absolute()),
+                    'words_csv': str(words_csv_path.absolute())
+                },
+                'metadata': {
+                    'chunk_count': len(emotion_results),
+                    'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
+                },
                 'error': 'Gemini analysis failed',
                 'gemini_error': str(e),
                 'hint': 'Install google-generativeai: pip install google-generativeai'
             }), 200
         except Exception as e:
             logger.error(f"Error in Gemini analysis: {str(e)}", exc_info=True)
+            # Read CSV data for frontend
+            chunks_csv_data = read_csv_to_dict(chunks_csv_path)
+            words_csv_data = read_csv_to_dict(words_csv_path)
             # Return CSV results even if Gemini fails
             return jsonify({
                 'status': 'partial_success',
-                'chunks_csv': str(chunks_csv_path.absolute()),
-                'words_csv': str(words_csv_path.absolute()),
-                'chunk_count': len(emotion_results),
-                'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0]),
+                'chunks_csv_data': chunks_csv_data,
+                'words_csv_data': words_csv_data,
+                'analysis': None,
+                'file_paths': {
+                    'chunks_csv': str(chunks_csv_path.absolute()),
+                    'words_csv': str(words_csv_path.absolute())
+                },
+                'metadata': {
+                    'chunk_count': len(emotion_results),
+                    'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
+                },
                 'error': 'Gemini analysis failed',
                 'gemini_error': str(e)
             }), 200

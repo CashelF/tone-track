@@ -72,7 +72,16 @@ curl -X POST http://localhost:5001/process_audio \
 
 ### Process audio and analyze with Gemini (all-in-one):
 
-**Process audio and immediately get Gemini analysis:**
+**Process audio using file path (recommended for frontend):**
+
+```bash
+curl -X POST http://localhost:5001/process_and_analyze_audio \
+  -F "audio_path=outputs/konrad_pt2.wav" \
+  -F "api_key=YOUR_GEMINI_API_KEY" \
+  -o response.json
+```
+
+**Or upload file directly:**
 
 ```bash
 curl -X POST http://localhost:5001/process_and_analyze_audio \
@@ -85,7 +94,7 @@ curl -X POST http://localhost:5001/process_and_analyze_audio \
 
 ```bash
 curl -X POST http://localhost:5001/process_and_analyze_audio \
-  -F "audio=@path/to/your/audio.wav" \
+  -F "audio_path=path/to/your/audio.wav" \
   -F "chunk_seconds=5.0" \
   -F "hop_seconds=2.5" \
   -F "device=cpu" \
@@ -99,23 +108,58 @@ curl -X POST http://localhost:5001/process_and_analyze_audio \
 ```bash
 export GEMINI_API_KEY=your_api_key_here
 curl -X POST http://localhost:5001/process_and_analyze_audio \
-  -F "audio=@konrad_pt2.wav" \
+  -F "audio_path=outputs/konrad_pt2.wav" \
   -o response.json
 ```
 
 This endpoint:
+
 1. Processes the audio file (generates chunks and words CSV files)
 2. Immediately analyzes the chunks CSV with Gemini
-3. Returns both the CSV file paths AND the LLM analysis in one response
-4. Saves the analysis to a text file in the outputs directory
+3. Returns both CSV data AND LLM analysis directly in JSON response
+4. Saves files to outputs directory for reference
 
-**Response includes:**
-- `chunks_csv`: Path to chunks CSV file
-- `words_csv`: Path to words CSV file
-- `chunk_count`: Number of emotion chunks
-- `word_count`: Number of aligned words
-- `analysis`: Full Gemini sentiment analysis text
-- `analysis_txt`: Path to saved analysis text file
+**Response format (ready for frontend display):**
+
+```json
+{
+  "status": "success",
+  "chunks_csv_data": [
+    {
+      "chunk_index": "0",
+      "start_time": "0.000",
+      "end_time": "5.000",
+      "transcript": "...",
+      "arousal": "0.756991",
+      "dominance": "0.770111",
+      "valence": "0.857169"
+    }
+  ],
+  "words_csv_data": [
+    {
+      "word": "Hey",
+      "chunk_index": "0",
+      "start_time": "0.000",
+      "end_time": "0.500"
+    }
+  ],
+  "analysis": "Full Gemini sentiment analysis text...",
+  "file_paths": {
+    "chunks_csv": "/path/to/chunks.csv",
+    "words_csv": "/path/to/words.csv",
+    "analysis_txt": "/path/to/analysis.txt"
+  },
+  "metadata": {
+    "chunk_count": 7,
+    "word_count": 50
+  }
+}
+```
+
+**Frontend can directly use:**
+- `chunks_csv_data`: Array of chunk objects (ready for table/chart display)
+- `words_csv_data`: Array of word objects (ready for timeline display)
+- `analysis`: LLM analysis text (ready for text display)
 
 ### Analyze existing chunks CSV with Gemini AI:
 
@@ -138,10 +182,12 @@ curl -X POST http://localhost:5001/analyze_chunks \
 ```
 
 **Optional parameters:**
+
 - `model`: Gemini model name (default: `gemini-2.5-flash`)
 - `api_key`: Gemini API key (if not set, uses `GEMINI_API_KEY` env var)
 
 The analysis provides:
+
 - Overall sentiment trajectory
 - Detailed analysis of emotional dips (valence, arousal, dominance)
 - Emotional recovery patterns
