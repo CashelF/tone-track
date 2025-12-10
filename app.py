@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 # Set up logging
@@ -35,6 +36,9 @@ from llm_analysis import analyze_chunks_with_gemini
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+
+# Enable CORS for all routes
+CORS(app)
 
 OUTPUT_DIR = Path(__file__).parent / 'outputs'
 OUTPUT_DIR.mkdir(exist_ok=True)
