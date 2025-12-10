@@ -113,7 +113,34 @@ class EmotionTracker:
         # Ensure ordering by index keys 0,1,2 → ["arousal", "dominance", "valence"]
         self.labels = [id2label[i] for i in range(len(id2label))]
 
-    def predict(self, audio: np.ndarray) -> List[SegmentResult]:
+    def predict_chunks(self, chunks: List[tuple[float, float, np.ndarray]]) -> List[SegmentResult]:
+        """
+        Predict emotions for pre-generated audio chunks.
+        
+        Args:
+            chunks: List of (start_time, end_time, chunk_audio) tuples
+            
+        Returns:
+            List of SegmentResult with emotion predictions
+        """
+        results: List[SegmentResult] = []
+        for start, end, chunk in chunks:
+            scores = self._predict_chunk(chunk)
+            results.append(SegmentResult(start_time=start, end_time=end, scores=scores))
+        return results
+
+    def predict(self, audio: np.ndarray) -> tuple[List[SegmentResult], List[tuple[float, float, np.ndarray]]]:
+        """
+        Predict emotions for audio chunks (generates chunks internally).
+        
+        Args:
+            audio: Audio array to process
+            
+        Returns:
+            Tuple of (emotion_results, chunks) where:
+            - emotion_results: List of SegmentResult with emotion predictions
+            - chunks: List of (start_time, end_time, chunk_audio) tuples
+        """
         chunks = list(
             generate_chunks(
                 audio=audio,
@@ -122,12 +149,8 @@ class EmotionTracker:
                 hop_seconds=self.config.resolved_hop_seconds(),
             )
         )
-
-        results: List[SegmentResult] = []
-        for start, end, chunk in chunks:
-            scores = self._predict_chunk(chunk)
-            results.append(SegmentResult(start_time=start, end_time=end, scores=scores))
-        return results
+        results = self.predict_chunks(chunks)
+        return results, chunks
 
     def _predict_chunk(self, chunk: np.ndarray) -> dict:
         proc_out = self.processor(
@@ -269,7 +292,7 @@ def main() -> None:
 
     audio = load_audio(args.audio, config.sample_rate)
     tracker = EmotionTracker(config)
-    results = tracker.predict(audio)
+    results, _ = tracker.predict(audio)  # Unpack results and chunks (chunks unused in CLI)
 
     output_path = args.output or args.audio.with_suffix(f".{args.output_format}")
 

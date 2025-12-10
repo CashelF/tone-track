@@ -29,3 +29,43 @@ python inference.py \
 
 The output CSV has `start_time`, `end_time`, and model scores (valence,
 arousal, dominance) for each chunk.
+
+### Start Flask server:
+
+```bash
+python app.py
+```
+
+The server will start on `http://localhost:5001` by default (to avoid AirPlay conflict on macOS).
+
+To use a different port:
+
+```bash
+PORT=8080 python app.py
+```
+
+### Process an audio file:
+
+**Basic usage (uses inference.py defaults: 5.0s chunks, non-overlapping):**
+
+```bash
+curl -X POST http://localhost:5001/process_audio \
+  -F "audio=@konrad_pt2.wav" \
+  -o response.json
+```
+
+**With custom chunk settings:**
+
+```bash
+curl -X POST http://localhost:5001/process_audio \
+  -F "audio=@path/to/your/audio.wav" \
+  -F "chunk_seconds=5.0" \
+  -F "hop_seconds=2.5" \
+  -F "device=cpu" \
+  -o response.json
+```
+
+### Output Files:
+
+1. **Chunks CSV** (`*_chunks.csv`): Emotion scores and transcripts for each chunk
+2. **Words CSV** (`*_words.csv`): Word-level alignment with emotion chunks
