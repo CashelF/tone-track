@@ -10,9 +10,10 @@ import csv
 import json
 import logging
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -45,6 +46,25 @@ CORS(app)
 OUTPUT_DIR = Path(__file__).parent / 'outputs'
 OUTPUT_DIR.mkdir(exist_ok=True)
 app.config['UPLOAD_FOLDER'] = str(OUTPUT_DIR)
+
+
+def get_session_dir(session_id: Optional[str], reset: bool = False) -> Path:
+    """Return the session-specific directory, optionally resetting it."""
+
+    if not session_id:
+        raise ValueError("session_id is required to keep data scoped per user session")
+
+    session_dir = OUTPUT_DIR / secure_filename(session_id)
+
+    if reset and session_dir.exists():
+        shutil.rmtree(session_dir, ignore_errors=True)
+
+    session_dir.mkdir(parents=True, exist_ok=True)
+    return session_dir
+
+
+def str_to_bool(value: Optional[str]) -> bool:
+    return str(value).lower() in {'1', 'true', 'yes', 'on'} if value is not None else False
 
 
 def write_chunk_csv(emotion_results: List[SegmentResult], chunk_transcripts: List[dict], labels: List[str], output_path: Path):
@@ -144,7 +164,7 @@ def read_csv_to_dict(csv_path: Path) -> List[dict]:
     return data
 
 
-def save_call_summary(base_name: str, analysis: str, chunks_csv_data: List[dict], metadata: dict):
+def save_call_summary(base_name: str, analysis: str, chunks_csv_data: List[dict], metadata: dict, session_dir: Path):
     """
     Save a summary of the call for overview analysis.
     
@@ -190,7 +210,7 @@ def save_call_summary(base_name: str, analysis: str, chunks_csv_data: List[dict]
         'word_count': metadata.get('word_count', 0)
     }
     
-    summary_path = OUTPUT_DIR / f"{base_name}_summary.json"
+    summary_path = session_dir / f"{base_name}_summary.json"
     with open(summary_path, 'w') as f:
         json.dump(call_summary, f, indent=2)
     
@@ -202,13 +222,20 @@ def save_call_summary(base_name: str, analysis: str, chunks_csv_data: List[dict]
 def process_audio():
     if 'audio' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
-    
+
     file = request.files['audio']
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-    
+
+    session_id = request.form.get('session_id')
+    reset_session = str_to_bool(request.form.get('reset_session'))
+    try:
+        session_dir = get_session_dir(session_id, reset=reset_session)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
     filename = secure_filename(file.filename)
-    input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    input_path = str(session_dir / filename)
     
     # Ensure output directory exists
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -248,7 +275,7 @@ def process_audio():
         emotion_results = tracker.predict_chunks(chunks)
         
         base_path = input_path_obj.stem
-        output_dir = Path(app.config['UPLOAD_FOLDER'])
+        output_dir = session_dir
         
         # Initialize ASR transcriber
         transcriber = get_transcriber(device=device)
@@ -299,6 +326,8 @@ def process_and_analyze_audio():
     - File path: 'audio_path' parameter pointing to existing WAV file
     
     Expected form data:
+    - session_id: Unique identifier for the user's session (required)
+    - reset_session (optional): Set to true to clear any previous session data
     - audio (optional): Audio file to upload
     - audio_path (optional): Path to existing WAV file (relative to outputs/ or absolute)
     - chunk_seconds (optional): Chunk length in seconds (default: 5.0)
@@ -316,21 +345,29 @@ def process_and_analyze_audio():
     logger.info("=== /process_and_analyze_audio endpoint called ===")
     logger.debug(f"Request form data: {dict(request.form)}")
     logger.debug(f"Request files: {dict(request.files)}")
-    
+
     # Handle file path or file upload
     input_path = None
-    
+
+    session_id = request.form.get('session_id')
+    reset_session = str_to_bool(request.form.get('reset_session'))
+    try:
+        session_dir = get_session_dir(session_id, reset=reset_session)
+    except ValueError as e:
+        logger.error(str(e))
+        return jsonify({'error': str(e)}), 400
+
     # Check for file path first (for frontend convenience)
     audio_path = request.form.get('audio_path')
     if audio_path:
         logger.info(f"Using audio_path parameter: {audio_path}")
         input_path_obj = Path(audio_path)
-        
+
         # Handle relative paths
         if not input_path_obj.is_absolute():
             # Try relative to outputs directory
             path_str = str(input_path_obj).replace('outputs/', '').lstrip('/')
-            input_path_obj = OUTPUT_DIR / path_str
+            input_path_obj = session_dir / path_str
             
             # If not found, try relative to project root
             if not input_path_obj.exists():
@@ -349,13 +386,10 @@ def process_and_analyze_audio():
         if file.filename == '':
             logger.error("No file selected")
             return jsonify({'error': 'No file selected'}), 400
-        
+
         filename = secure_filename(file.filename)
-        input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
-        # Ensure output directory exists
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        
+        input_path = str(session_dir / filename)
+
         file.save(input_path)
         logger.info(f"Saved uploaded audio file to: {input_path}")
     else:
@@ -397,7 +431,7 @@ def process_and_analyze_audio():
         emotion_results = tracker.predict_chunks(chunks)
         
         base_path = input_path_obj.stem
-        output_dir = Path(app.config['UPLOAD_FOLDER'])
+        output_dir = session_dir
         
         # Initialize ASR transcriber
         transcriber = get_transcriber(device=device)
@@ -443,7 +477,7 @@ def process_and_analyze_audio():
                 'chunk_count': len(emotion_results),
                 'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
             }
-            save_call_summary(base_name, analysis, chunks_csv_data, metadata)
+            save_call_summary(base_name, analysis, chunks_csv_data, metadata, session_dir)
             
             return jsonify({
                 'status': 'success',
@@ -514,6 +548,7 @@ def analyze_chunks():
     Analyze chunks CSV using Gemini API for sentiment analysis.
     
     Expected form data:
+    - session_id: Unique identifier for the user's session (required)
     - chunks_csv: Path to the chunks CSV file (relative to outputs/ or absolute path)
     - api_key (optional): Gemini API key (if not provided, uses GEMINI_API_KEY env var)
     - model (optional): Gemini model name (default: gemini-2.5-flash)
@@ -522,8 +557,11 @@ def analyze_chunks():
     logger.debug(f"Request method: {request.method}")
     logger.debug(f"Request form data: {dict(request.form)}")
     logger.debug(f"Request files: {dict(request.files)}")
-    
+
     try:
+        session_id = request.form.get('session_id')
+        session_dir = get_session_dir(session_id)
+
         chunks_csv_path = request.form.get('chunks_csv')
         logger.debug(f"Received chunks_csv_path: {chunks_csv_path}")
         
@@ -546,9 +584,9 @@ def analyze_chunks():
             # Strip "outputs/" prefix if present to avoid doubling
             path_str = str(csv_path).replace('outputs/', '').lstrip('/')
             logger.debug(f"Stripped path_str: {path_str}")
-            
-            # Try relative to OUTPUT_DIR
-            csv_path = OUTPUT_DIR / path_str
+
+            # Try relative to this session's directory
+            csv_path = session_dir / path_str
             logger.debug(f"Final csv_path: {csv_path}")
         
         logger.info(f"Looking for CSV file at: {csv_path}")
@@ -556,15 +594,15 @@ def analyze_chunks():
         
         if not csv_path.exists():
             logger.error(f"CSV file not found: {csv_path}")
-            logger.debug(f"OUTPUT_DIR contents: {list(OUTPUT_DIR.iterdir()) if OUTPUT_DIR.exists() else 'OUTPUT_DIR does not exist'}")
+            logger.debug(f"SESSION_DIR contents: {list(session_dir.iterdir()) if session_dir.exists() else 'session_dir does not exist'}")
             return jsonify({
                 'error': f'CSV file not found: {csv_path}',
                 'debug': {
                     'requested_path': chunks_csv_path,
                     'resolved_path': str(csv_path),
-                    'output_dir': str(OUTPUT_DIR),
-                    'output_dir_exists': OUTPUT_DIR.exists(),
-                    'output_dir_contents': [str(p.name) for p in OUTPUT_DIR.iterdir()] if OUTPUT_DIR.exists() else []
+                    'output_dir': str(session_dir),
+                    'output_dir_exists': session_dir.exists(),
+                    'output_dir_contents': [str(p.name) for p in session_dir.iterdir()] if session_dir.exists() else []
                 }
             }), 404
         
@@ -606,7 +644,7 @@ def analyze_chunks():
         
         logger.debug(f"Base name: {base_name}")
         
-        analysis_txt_path = OUTPUT_DIR / f"{base_name}_analysis.txt"
+        analysis_txt_path = session_dir / f"{base_name}_analysis.txt"
         logger.info(f"Saving analysis to: {analysis_txt_path}")
         
         try:
@@ -650,17 +688,21 @@ def generate_overviews():
     
     Looks in outputs/ folder for all *_summary.json files, reads them,
     and sends to LLM for a short trend overview.
-    
+
     Expected form data (optional):
+    - session_id: Unique identifier for the user's session (required)
     - api_key (optional): Gemini API key (if not provided, uses GEMINI_API_KEY env var)
     - model (optional): Gemini model name (default: gemini-2.5-flash)
     """
     logger.info("=== /generate_overviews endpoint called ===")
-    
+
     try:
+        session_id = request.form.get('session_id')
+        session_dir = get_session_dir(session_id)
+
         # Find all summary files in outputs directory
-        summary_files = list(OUTPUT_DIR.glob("*_summary.json"))
-        logger.info(f"Found {len(summary_files)} summary files")
+        summary_files = list(session_dir.glob("*_summary.json"))
+        logger.info(f"Found {len(summary_files)} summary files for session {session_id}")
         
         if not summary_files:
             return jsonify({
