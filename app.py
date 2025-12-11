@@ -7,21 +7,16 @@ Example usage:
 """
 
 import csv
+import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-
-# Set up logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 from asr import get_transcriber
 from inference import (
@@ -32,7 +27,14 @@ from inference import (
     SegmentResult,
     EmotionTracker,
 )
-from llm_analysis import analyze_chunks_with_gemini
+from llm_analysis import analyze_chunks_with_gemini, generate_overview_analysis
+
+# Set up logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
@@ -140,6 +142,60 @@ def read_csv_to_dict(csv_path: Path) -> List[dict]:
         for row in reader:
             data.append(row)
     return data
+
+
+def save_call_summary(base_name: str, analysis: str, chunks_csv_data: List[dict], metadata: dict):
+    """
+    Save a summary of the call for overview analysis.
+    
+    Args:
+        base_name: Base name for the file
+        analysis: Full analysis text (entire Gemini output)
+        chunks_csv_data: Chunks data
+        metadata: Metadata about the call
+    """
+    # Include entire analysis in summary
+    summary = analysis
+    
+    # Calculate average emotion scores
+    avg_arousal = 0.0
+    avg_dominance = 0.0
+    avg_valence = 0.0
+    count = 0
+    
+    for chunk in chunks_csv_data:
+        try:
+            avg_arousal += float(chunk.get('arousal', 0))
+            avg_dominance += float(chunk.get('dominance', 0))
+            avg_valence += float(chunk.get('valence', 0))
+            count += 1
+        except (ValueError, TypeError):
+            continue
+    
+    if count > 0:
+        avg_arousal /= count
+        avg_dominance /= count
+        avg_valence /= count
+    
+    call_summary = {
+        'timestamp': datetime.now().isoformat(),
+        'base_name': base_name,
+        'summary': summary,
+        'avg_scores': {
+            'arousal': round(avg_arousal, 3),
+            'dominance': round(avg_dominance, 3),
+            'valence': round(avg_valence, 3)
+        },
+        'chunk_count': metadata.get('chunk_count', 0),
+        'word_count': metadata.get('word_count', 0)
+    }
+    
+    summary_path = OUTPUT_DIR / f"{base_name}_summary.json"
+    with open(summary_path, 'w') as f:
+        json.dump(call_summary, f, indent=2)
+    
+    logger.info(f"Saved call summary to: {summary_path}")
+    return summary_path
 
 
 @app.route('/process_audio', methods=['POST'])
@@ -371,20 +427,23 @@ def process_and_analyze_audio():
             )
             logger.info(f"Gemini analysis completed, length: {len(analysis)} characters")
             
-            # Save analysis to text file
+            # Get base name
             csv_stem = chunks_csv_path.stem
             if csv_stem.endswith('_chunks'):
                 base_name = csv_stem[:-7]
             else:
                 base_name = csv_stem
             
-            analysis_txt_path = OUTPUT_DIR / f"{base_name}_analysis.txt"
-            analysis_txt_path.write_text(analysis, encoding='utf-8')
-            logger.info(f"Saved analysis to: {analysis_txt_path}")
-            
             # Read CSV data for frontend
             chunks_csv_data = read_csv_to_dict(chunks_csv_path)
             words_csv_data = read_csv_to_dict(words_csv_path)
+            
+            # Save call summary for overview analysis (includes full analysis)
+            metadata = {
+                'chunk_count': len(emotion_results),
+                'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
+            }
+            save_call_summary(base_name, analysis, chunks_csv_data, metadata)
             
             return jsonify({
                 'status': 'success',
@@ -393,13 +452,9 @@ def process_and_analyze_audio():
                 'analysis': analysis,
                 'file_paths': {
                     'chunks_csv': str(chunks_csv_path.absolute()),
-                    'words_csv': str(words_csv_path.absolute()),
-                    'analysis_txt': str(analysis_txt_path.absolute())
+                    'words_csv': str(words_csv_path.absolute())
                 },
-                'metadata': {
-                    'chunk_count': len(emotion_results),
-                    'word_count': len([w for w in aligned_words if w.get('chunk_idx', -1) >= 0])
-                }
+                'metadata': metadata
             }), 200
             
         except ImportError as e:
@@ -580,6 +635,93 @@ def analyze_chunks():
     except ValueError as e:
         logger.error(f"ValueError: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+
+@app.route('/generate_overviews', methods=['POST'])
+def generate_overviews():
+    """
+    Generate overview trend analysis from all saved call summaries.
+    
+    Looks in outputs/ folder for all *_summary.json files, reads them,
+    and sends to LLM for a short trend overview.
+    
+    Expected form data (optional):
+    - api_key (optional): Gemini API key (if not provided, uses GEMINI_API_KEY env var)
+    - model (optional): Gemini model name (default: gemini-2.5-flash)
+    """
+    logger.info("=== /generate_overviews endpoint called ===")
+    
+    try:
+        # Find all summary files in outputs directory
+        summary_files = list(OUTPUT_DIR.glob("*_summary.json"))
+        logger.info(f"Found {len(summary_files)} summary files")
+        
+        if not summary_files:
+            return jsonify({
+                'status': 'error',
+                'error': 'No call summaries found. Process some audio files first using /process_and_analyze_audio'
+            }), 404
+        
+        # Read all summaries
+        summaries = []
+        for summary_file in sorted(summary_files):
+            try:
+                with open(summary_file, 'r') as f:
+                    summary_data = json.load(f)
+                    summaries.append(summary_data)
+            except Exception as e:
+                logger.warning(f"Error reading {summary_file}: {str(e)}")
+                continue
+        
+        if not summaries:
+            return jsonify({
+                'status': 'error',
+                'error': 'No valid summaries found'
+            }), 404
+        
+        logger.info(f"Loaded {len(summaries)} summaries")
+        
+        # Get optional parameters
+        api_key = request.form.get('api_key') or None
+        model_name = request.form.get('model', 'gemini-2.5-flash')
+        
+        # Generate overview
+        try:
+            overview = generate_overview_analysis(
+                summaries=summaries,
+                api_key=api_key,
+                model_name=model_name
+            )
+            logger.info(f"Overview generated, length: {len(overview)} characters")
+            
+            return jsonify({
+                'status': 'success',
+                'overview': overview,
+                'call_count': len(summaries)
+            }), 200
+            
+        except ImportError as e:
+            logger.error(f"ImportError: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': str(e),
+                'hint': 'Install google-generativeai: pip install google-generativeai'
+            }), 500
+        except ValueError as e:
+            logger.error(f"ValueError: {str(e)}", exc_info=True)
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            logger.error(f"Error generating overview: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': str(e),
+                'error_type': type(e).__name__
+            }), 500
+        
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return jsonify({

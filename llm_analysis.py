@@ -73,35 +73,12 @@ def create_sentiment_analysis_prompt(chunks_data: str) -> str:
     Returns:
         Complete prompt for the LLM
     """
-    prompt = f"""You are analyzing emotional tracking data from a conversation. The data includes transcripts and three emotion dimensions:
+    prompt = f"""Analyze emotional tracking data. Dimensions: Arousal (energy), Dominance (control), Valence (positivity).
 
-- **Arousal**: Energy level (low = calm, high = excited)
-- **Dominance**: Sense of control/power (low = submissive, high = dominant)
-- **Valence**: Emotional positivity (low = negative, high = positive)
-
-Here is the data:
-
+Data:
 {chunks_data}
 
-Please provide a comprehensive sentiment analysis with the following focus:
-
-1. **Overall Sentiment**: Describe the general emotional trajectory of the conversation.
-
-2. **Emotional Dips Analysis** (CRITICAL FOCUS): 
-   - Identify all significant dips in valence, arousal, or dominance
-   - For each dip, explain:
-     * What the person was saying during that dip
-     * What emotional state this suggests (e.g., concern, hesitation, disappointment)
-     * The potential reasons or triggers based on the transcript
-     * How significant the dip is (mild concern vs. major concern)
-
-3. **Emotional Recovery**: If there are dips followed by recovery, analyze how the person's emotional state changes and what might have caused the recovery.
-
-4. **Key Insights**: Summarize the most important emotional patterns, especially any concerning dips that might indicate hesitation, concern, or negative sentiment.
-
-5. **Recommendations**: Based on the emotional analysis, provide actionable insights about the person's emotional state and any areas that might need attention or follow-up.
-
-Format your response in clear sections with headers. Be specific about timestamps and quotes from the transcript when discussing emotional dips."""
+Provide exactly 2 sentences: (1) Overall emotional trajectory and key dips. (2) Main insight or concern."""
     
     return prompt
 
@@ -188,6 +165,69 @@ def analyze_chunks_with_gemini(
         
         logger.info(f"Analysis length: {len(response.text)} characters")
         return response.text
+    except Exception as e:
+        logger.error(f"Error calling Gemini API: {str(e)}", exc_info=True)
+        raise
+
+
+def generate_overview_analysis(
+    summaries: List[dict],
+    api_key: str | None = None,
+    model_name: str = "gemini-2.5-flash"
+) -> str:
+    """
+    Generate overview trend analysis from multiple call summaries.
+    
+    Args:
+        summaries: List of call summary dictionaries
+        api_key: Gemini API key (if None, reads from GEMINI_API_KEY env var)
+        model_name: Name of the Gemini model to use
+        
+    Returns:
+        Short overview paragraph as string
+    """
+    logger.info(f"Generating overview from {len(summaries)} call summaries")
+    
+    if genai is None:
+        logger.error("google-generativeai is not installed")
+        raise ImportError(
+            "google-generativeai is not installed. "
+            "Install it with: pip install google-generativeai"
+        )
+    
+    # Get API key
+    if api_key is None:
+        import os
+        api_key = os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            logger.error("GEMINI_API_KEY not found in environment")
+            raise ValueError(
+                "GEMINI_API_KEY environment variable not set. "
+                "Either set it or pass api_key parameter."
+            )
+    
+    # Configure Gemini
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(model_name)
+    
+    # Format summaries for prompt
+    summaries_text = "\n\n".join([
+        f"Call {i+1}: {s.get('summary', '')} "
+        f"(Avg: V={s.get('avg_scores', {}).get('valence', 0):.2f}, "
+        f"A={s.get('avg_scores', {}).get('arousal', 0):.2f}, "
+        f"D={s.get('avg_scores', {}).get('dominance', 0):.2f})"
+        for i, s in enumerate(summaries)
+    ])
+    
+    # Very short prompt
+    prompt = f"""Analyze trends across {len(summaries)} calls:\n\n{summaries_text}\n\nOne short paragraph on overall emotional trends."""
+    
+    # Generate response
+    try:
+        response = model.generate_content(prompt)
+        if not response.text:
+            return "No overview generated."
+        return response.text.strip()
     except Exception as e:
         logger.error(f"Error calling Gemini API: {str(e)}", exc_info=True)
         raise
