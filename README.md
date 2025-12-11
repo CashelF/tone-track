@@ -1,3 +1,14 @@
+---
+title: tone-track backend
+emoji: 🎵
+colorFrom: blue
+colorTo: purple
+sdk: docker
+sdk_version: "0.0.1"
+app_file: app.py
+pinned: false
+---
+
 # tone-track
 
 Track valence, arousal, and dominance over time using the
