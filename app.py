@@ -218,7 +218,7 @@ def process_audio():
     try:
         input_path_obj = Path(input_path)
         
-        chunk_seconds = float(request.form.get('chunk_seconds', 5.0))
+        chunk_seconds = float(request.form.get('chunk_seconds', 3.0))
         hop_seconds = request.form.get('hop_seconds')
         hop_seconds = float(hop_seconds) if hop_seconds else None
         device = request.form.get('device', 'cpu')
@@ -365,7 +365,7 @@ def process_and_analyze_audio():
     try:
         input_path_obj = Path(input_path)
         
-        chunk_seconds = float(request.form.get('chunk_seconds', 5.0))
+        chunk_seconds = float(request.form.get('chunk_seconds', 3.0))
         hop_seconds = request.form.get('hop_seconds')
         hop_seconds = float(hop_seconds) if hop_seconds else None
         device = request.form.get('device', 'cpu')

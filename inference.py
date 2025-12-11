@@ -86,7 +86,7 @@ class InferenceConfig:
 
     model_id: str = MODEL_ID
     sample_rate: int = DEFAULT_SAMPLE_RATE
-    chunk_seconds: float = 5.0
+    chunk_seconds: float = 3.0
     hop_seconds: float | None = None
     device: str = "cpu"
 

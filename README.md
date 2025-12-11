@@ -70,7 +70,7 @@ curl -X POST http://localhost:5001/process_audio \
 ```bash
 curl -X POST http://localhost:5001/process_audio \
   -F "audio=@path/to/your/audio.wav" \
-  -F "chunk_seconds=5.0" \
+  -F "chunk_seconds=3.0" \
   -F "hop_seconds=2.5" \
   -F "device=cpu" \
   -o response.json
@@ -106,7 +106,7 @@ curl -X POST http://localhost:5001/process_and_analyze_audio \
 ```bash
 curl -X POST http://localhost:5001/process_and_analyze_audio \
   -F "audio_path=path/to/your/audio.wav" \
-  -F "chunk_seconds=5.0" \
+  -F "chunk_seconds=3.0" \
   -F "hop_seconds=2.5" \
   -F "device=cpu" \
   -F "model=gemini-2.5-flash" \
