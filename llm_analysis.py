@@ -78,7 +78,7 @@ def create_sentiment_analysis_prompt(chunks_data: str) -> str:
 Data:
 {chunks_data}
 
-Provide exactly 2 sentences: (1) Overall emotional trajectory and key dips. (2) Main insight or concern."""
+Provide exactly 1 sentence with: (1) Overall emotional trajectory and key dips. (2) Main insight or concern."""
     
     return prompt
 
