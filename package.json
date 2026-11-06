@@ -1,0 +1,9 @@
+{
+  "name": "tone-track",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --check docs/app.js && node --test tests/*.test.js",
+    "start": "python3 -m http.server 4187 --directory docs"
+  }
+}
