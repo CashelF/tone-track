@@ -91,6 +91,10 @@ export async function requestAnalysis(path, form, signal) {
     throw new Error('The analysis service could not be reached. It may be waking up. Please try again shortly.');
   }
   if (!response.ok) {
+    if (response.status === 422) {
+      const detail = await response.json().catch(() => ({}));
+      if (detail.code === 'invalid_audio') throw new Error('This file could not be decoded. Try recording again, or upload a WAV or MP3 file.');
+    }
     if (response.status === 413) throw new Error('The recording is too large for the analysis service. Try a smaller file.');
     if (response.status === 404 && path === '/generate_overviews') throw new Error('No AI summaries are available yet. Analyze a recording with AI notes first.');
     if (response.status === 429) throw new Error('The service is busy. Please wait a moment before trying again.');

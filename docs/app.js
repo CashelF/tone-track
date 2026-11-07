@@ -1,8 +1,8 @@
-import {DIMENSIONS, escapeHtml as esc, formatTime, normalizeAnalysis, average, segmentAt, transcriptSegments, validateFile, toCsv, requestAnalysis} from './model.js';
+import {DIMENSIONS, escapeHtml as esc, formatTime, normalizeAnalysis, average, segmentAt, transcriptSegments, validateFile, toCsv, requestAnalysis} from './model.js?v=20261107';
 
 const $ = id => document.getElementById(id);
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-const colors = {valence:'#53844e', arousal:'#c0804b', dominance:'#6388b0'};
+const colors = {valence:'#53844e', arousal:'#b87943', dominance:'#6388b0'};
 const sessionId = crypto.randomUUID();
 const recordings = [];
 const visibleSeries = new Set(DIMENSIONS);
@@ -10,7 +10,7 @@ const audio = $('audio');
 let selected = null, selectedFile = null, previewUrl = null;
 let recorder = null, stream = null, recordTimer = null, recordingStartedAt = 0, discardRecording = false;
 let processingController = null, processingTimer = null, overviewBusy = false, overviewController = null;
-let waveform = null, waveVersion = 0, transcript = [], toastTimer = null, mode = 'upload', chartWidth = 960;
+let transcript = [], toastTimer = null, mode = 'upload', chartWidth = 960;
 
 function toast(message) {
   $('toast').textContent = message;
@@ -33,11 +33,13 @@ document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('c
 }));
 
 function renderSessions() {
-  $('session-count').textContent = String(recordings.length).padStart(2, '0');
-  $('sessions').innerHTML = recordings.map(recording => `<button class="session ${selected?.id === recording.id ? 'selected' : ''}" data-recording="${esc(recording.id)}" aria-pressed="${selected?.id === recording.id}"><span class="session-icon">${icon('wave')}</span><span class="session-copy"><strong>${esc(recording.name)}</strong><small>${formatTime(recording.duration)} · ${recording.sample ? 'Sample recording' : 'Your recording'}</small></span>${icon('chevron')}</button>`).join('');
-  $('sessions').querySelectorAll('[data-recording]').forEach(button => button.addEventListener('click', () => selectRecording(recordings.find(item => item.id === button.dataset.recording))));
-  $('overview-button').disabled = !recordings.some(item => !item.sample && item.analysis);
+  $('recordings').innerHTML = recordings.map(recording => `<option value="${esc(recording.id)}">${esc(recording.name)}</option>`).join('');
+  $('recordings').value = selected?.id || '';
+  $('recordings').hidden = recordings.length < 2;
+  $('recording-name').hidden = recordings.length > 1;
+  $('overview-button').hidden = recordings.filter(item => !item.sample && item.analysis).length < 2;
 }
+$('recordings').addEventListener('change', event => selectRecording(recordings.find(item => item.id === event.target.value)));
 
 function selectRecording(recording) {
   if (!recording) return;
@@ -48,31 +50,24 @@ function selectRecording(recording) {
   $('speed-button').textContent = '1×';
   $('speed-button').setAttribute('aria-label', 'Playback speed 1 times');
   $('recording-name').textContent = recording.name;
-  $('sample-badge').hidden = !recording.sample;
-  $('recording-duration').textContent = `${formatTime(recording.duration)} recording`;
-  $('recording-detail').textContent = recording.sample ? 'JFK · Inaugural address, 1961' : `${recording.chunks.length} analyzed segments`;
+  $('recording-detail').textContent = recording.sample ? 'Sample recording · 1961' : '';
+  $('recording-detail').hidden = !recording.sample;
   $('total-time').textContent = formatTime(recording.duration);
   $('seek').max = recording.duration;
   $('seek').disabled = false;
-  for (const id of ['play-button','rewind-button','speed-button','export-button']) $(id).disabled = false;
-  notice(recording.partial ? 'Emotion scores and transcript are ready. AI notes are unavailable for this recording; you can still listen, explore, and export your results.' : '');
+  for (const id of ['play-button','speed-button','export-button']) $(id).disabled = false;
+  notice();
   renderSessions();
   renderMetrics();
   renderChart();
   renderTranscript();
   renderInsights();
   updatePosition(0);
-  waveform = null;
-  drawWaveform();
-  decodeWaveform(recording);
 }
 
 function renderMetrics() {
   for (const key of DIMENSIONS) {
     $(key + '-score').textContent = average(selected.chunks, key).toFixed(2);
-    const values = selected.chunks.map(chunk => Math.max(0, Math.min(1, chunk[key])));
-    const line = values.map((value, index) => `${index ? 'L' : 'M'}${(index / Math.max(1, values.length - 1) * 128 + 2).toFixed(1)},${(36 - value * 31).toFixed(1)}`).join(' ');
-    $(key + '-spark').innerHTML = `<path d="${line} L130 40 L2 40 Z" fill="currentColor" opacity=".07"/><path d="${line}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>`;
   }
 }
 
@@ -82,12 +77,12 @@ function renderChart() {
   if (!selected) return;
   chartWidth = Math.max(200,$('emotion-chart').getBoundingClientRect().width);
   $('emotion-chart').setAttribute('viewBox',`0 0 ${chartWidth} 230`);
-  const grid = [0,.25,.5,.75,1].map(value => `<line class="grid-line" x1="36" x2="${chartWidth-18}" y1="${chartY(value)}" y2="${chartY(value)}"/><text class="chart-label" x="27" y="${chartY(value)+3}" text-anchor="end">${value.toFixed(2)}</text>`).join('');
+  const grid = [0,.5,1].map(value => `<line class="grid-line" x1="36" x2="${chartWidth-18}" y1="${chartY(value)}" y2="${chartY(value)}"/><text class="chart-label" x="27" y="${chartY(value)+3}" text-anchor="end">${value}</text>`).join('');
   const labels = Array.from({length:6}, (_, index) => `<text class="chart-label" x="${chartX(selected.duration * index/5)}" y="220" text-anchor="${index===0?'start':index===5?'end':'middle'}">${formatTime(selected.duration*index/5)}</text>`).join('');
   const lines = DIMENSIONS.filter(key => visibleSeries.has(key)).map(key => {
     const line = selected.chunks.map((chunk, index) => `${index?'L':'M'}${chartX((chunk.start_time+chunk.end_time)/2).toFixed(2)},${chartY(chunk[key]).toFixed(2)}`).join(' ');
     if (selected.chunks.length === 1) return `<circle cx="${chartX(selected.duration/2)}" cy="${chartY(selected.chunks[0][key])}" r="4" fill="${colors[key]}"/>`;
-    return `${key === 'valence' ? `<path d="${line} L${chartX((selected.chunks.at(-1).start_time+selected.chunks.at(-1).end_time)/2)} 195 L${chartX((selected.chunks[0].start_time+selected.chunks[0].end_time)/2)} 195 Z" fill="${colors[key]}" opacity=".04"/>` : ''}<path class="series-path" d="${line}" stroke="${colors[key]}"/>`;
+    return `<path class="series-path" d="${line}" stroke="${colors[key]}"/>`;
   }).join('');
   $('emotion-chart').innerHTML = `<title id="chart-title">Emotion scores over time</title><desc id="chart-description">Scores from zero to one. Use the audio position slider to explore, or download exact scores using Export.</desc>${grid}${labels}${lines}<g id="chart-cursor"><line class="playhead" y1="16" y2="195" x1="43" x2="43"/>${DIMENSIONS.filter(key => visibleSeries.has(key)).map(key => `<circle data-dot="${key}" r="4" stroke="#fff" stroke-width="2" fill="${colors[key]}"/>`).join('')}</g>`;
   updatePosition(audio.currentTime || 0);
@@ -124,27 +119,10 @@ function renderTranscript() {
   $('transcript').querySelectorAll('[data-segment]').forEach(button => button.addEventListener('click', () => seek(transcript[Number(button.dataset.segment)].start_time)));
 }
 
-function observations(recording) {
-  const peak = recording.chunks.reduce((best, chunk) => chunk.arousal > best.arousal ? chunk : best);
-  const start = recording.chunks[0], end = recording.chunks.at(-1);
-  const delta = end.valence - start.valence;
-  return [
-    {title:'Where the energy peaks', text:`The highest arousal estimate is ${peak.arousal.toFixed(2)}, in the ${formatTime(peak.start_time)}–${formatTime(peak.end_time)} window. Listen to that moment in context.`, time:peak.start_time},
-    {title:'From beginning to end', text:`Valence ${Math.abs(delta)<.04?'stays similar':delta>0?'rises':'falls'} from ${start.valence.toFixed(2)} in the first window to ${end.valence.toFixed(2)} in the last. These scores describe the model’s reading of the voice.`},
-    {title:'Keep the full picture', text:'Emotion scores are estimates. Compare the curves with the words and the recording before drawing a conclusion.'}
-  ];
-}
-
 function renderInsights() {
-  if (selected.analysis) {
-    $('insight-badge').textContent = 'AI NOTES';
-    // Text only: model output and transcripts never become executable HTML.
-    $('insights').innerHTML = selected.analysis.split(/\n\s*\n/).map(part => `<p>${esc(part).replace(/\n/g,'<br>')}</p>`).join('');
-  } else {
-    $('insight-badge').textContent = 'FROM THE SCORES';
-    $('insights').innerHTML = observations(selected).map((item,index) => `<div class="insight-item"><span class="insight-number">0${index+1}</span><div><strong>${esc(item.title)}</strong><p>${esc(item.text)}</p>${item.time !== undefined ? `<button class="text-button" data-listen="${item.time}">Listen to this moment ${icon('arrow')}</button>` : ''}</div></div>`).join('');
-    $('insights').querySelectorAll('[data-listen]').forEach(button => button.addEventListener('click', async () => { seek(Number(button.dataset.listen)); await play(); }));
-  }
+  $('insights-section').hidden = !selected.analysis;
+  // Text only: model output and transcripts never become executable HTML.
+  $('insights').innerHTML = selected.analysis ? selected.analysis.split(/\n\s*\n/).map(part => `<p>${esc(part).replace(/\n/g,'<br>')}</p>`).join('') : '';
 }
 
 function updatePosition(time) {
@@ -159,14 +137,12 @@ function updatePosition(time) {
     cursor.querySelector('line').setAttribute('x2',chartX(time));
     cursor.querySelectorAll('[data-dot]').forEach(dot => { dot.setAttribute('cx',chartX(time)); dot.setAttribute('cy',chartY(chunk[dot.dataset.dot])); });
   }
-  $('current-moment').textContent = `Window ${formatTime(chunk.start_time)}–${formatTime(chunk.end_time)} · ${chunk.valence.toFixed(2)} valence`;
   let current = transcript.findLastIndex(segment => segment.start_time <= time);
   $('transcript').querySelectorAll('[data-segment]').forEach(button => {
     const isCurrent = Number(button.dataset.segment) === current;
     button.classList.toggle('current',isCurrent);
     if (isCurrent) button.setAttribute('aria-current','true'); else button.removeAttribute('aria-current');
   });
-  drawWaveform();
 }
 
 function seek(time) {
@@ -177,7 +153,6 @@ function seek(time) {
 }
 async function play() { try { await audio.play(); } catch { toast('Audio could not play. Try downloading or reselecting the recording.'); } }
 $('play-button').addEventListener('click', () => { if (audio.paused) play(); else audio.pause(); });
-$('rewind-button').addEventListener('click', () => seek(audio.currentTime-5));
 $('seek').addEventListener('input', event => seek(Number(event.target.value)));
 $('speed-button').addEventListener('click', () => {
   const speeds = [1,1.25,1.5,2,.75], speed = speeds[(speeds.indexOf(audio.playbackRate)+1)%speeds.length];
@@ -193,41 +168,6 @@ for (const type of ['play','pause','ended']) audio.addEventListener(type, () => 
 });
 audio.addEventListener('error', () => { if(selected) toast('This browser could not play the audio. The analysis and export are still available.'); });
 
-async function decodeWaveform(recording) {
-  const version = ++waveVersion;
-  let context;
-  try {
-    context = new AudioContext();
-    const bytes = recording.file ? await recording.file.arrayBuffer() : await (await fetch(recording.audioUrl)).arrayBuffer();
-    const buffer = await context.decodeAudioData(bytes);
-    const samples = buffer.getChannelData(0), buckets = 220, step = Math.max(1, Math.floor(samples.length/buckets));
-    const peaks = Array.from({length:buckets}, (_, index) => {
-      let sum = 0, count = 0;
-      for(let j=index*step;j<Math.min(samples.length,(index+1)*step);j+=Math.max(1,Math.floor(step/120))) { sum+=samples[j]*samples[j]; count++; }
-      return Math.sqrt(sum/Math.max(1,count));
-    });
-    const maximum = Math.max(...peaks,.001);
-    if (version === waveVersion && selected?.id === recording.id) { waveform = peaks.map(value => value/maximum); drawWaveform(); }
-  } catch { /* A flat track remains a usable seek control when decoding is unsupported. */ }
-  finally { if(context) await context.close().catch(()=>{}); }
-}
-
-function drawWaveform() {
-  const canvas = $('waveform'), rect = canvas.getBoundingClientRect();
-  if (!rect.width) return;
-  const ratio = Math.min(window.devicePixelRatio || 1,2);
-  canvas.width = rect.width*ratio; canvas.height = rect.height*ratio;
-  const ctx = canvas.getContext('2d');
-  ctx.scale(ratio,ratio);
-  const bars = Math.floor(rect.width/4), progress = selected ? Number($('seek').value)/selected.duration : 0;
-  for(let i=0;i<bars;i++) {
-    const peak = waveform ? waveform[Math.min(waveform.length-1,Math.floor(i/bars*waveform.length))] : .07;
-    const height = Math.max(3,peak*(rect.height-4));
-    ctx.fillStyle = i/bars <= progress ? '#86a75a' : '#d1dabe';
-    ctx.fillRect(i*4,(rect.height-height)/2,2,height);
-  }
-}
-new ResizeObserver(drawWaveform).observe($('waveform'));
 new ResizeObserver(() => {
   if (selected && Math.abs($('emotion-chart').getBoundingClientRect().width-chartWidth)>1) renderChart();
 }).observe($('emotion-chart'));
@@ -238,6 +178,8 @@ function setMode(next) {
   $('upload-mode').hidden = next !== 'upload'; $('record-mode').hidden = next !== 'record';
   for (const key of ['upload','record']) { $(key+'-tab').classList.toggle('selected',next===key); $(key+'-tab').setAttribute('aria-pressed',String(next===key)); }
   clearSelectedFile();
+  $('record-label').textContent = 'Start recording';
+  $('record-time').textContent = '0:00';
   $('upload-error').hidden = true;
 }
 
@@ -261,8 +203,8 @@ function clearSelectedFile() {
   previewUrl = null;
   $('audio-preview').pause(); $('audio-preview').removeAttribute('src'); $('audio-preview').load(); $('audio-preview').hidden=true;
   $('file-input').value = '';
-  $('file-label').textContent = 'Drop a recording here';
-  $('file-detail').textContent = 'or click to browse · up to 50 MB';
+  $('file-label').textContent = 'Choose audio or drop a file';
+  $('file-detail').textContent = 'Up to 50 MB';
   $('analyze-button').disabled = true;
 }
 function formError(message) { $('upload-error').textContent=message; $('upload-error').hidden=!message; }
@@ -351,13 +293,13 @@ $('upload-form').addEventListener('submit',async event=>{
   const controller=new AbortController();
   processingController=controller;
   setProcessing(true);
-  $('processing-title').textContent='Listening closely…';
-  $('processing-detail').textContent='Transcribing and mapping the emotional arc. This can take a few minutes.';
+  $('processing-title').textContent='Analyzing…';
+  $('processing-detail').textContent='This may take a few minutes.';
   const start=Date.now();
   const timeout=setTimeout(()=>controller.abort('timeout'),600000);
   processingTimer=setInterval(()=>{
-    $('processing-title').textContent=`Listening closely… ${formatTime((Date.now()-start)/1000)}`;
-    if(Date.now()-start>60000) $('processing-detail').textContent='Still processing. The audio models can take several minutes, especially on the first recording.';
+    $('processing-title').textContent=`Analyzing… ${formatTime((Date.now()-start)/1000)}`;
+    if(Date.now()-start>60000) $('processing-detail').textContent='Still processing. The first recording can take longer.';
   },1000);
   try {
     const raw=await requestAnalysis('/process_and_analyze_audio',form,controller.signal);
@@ -367,7 +309,7 @@ $('upload-form').addEventListener('submit',async event=>{
     processingController=null;
     selectRecording(recording);
     $('upload-dialog').close();
-    toast(result.partial?'Timeline ready. AI notes are temporarily unavailable.':'Your recording is ready for a closer listen.');
+    toast(result.partial?'Analysis ready. AI notes are unavailable.':'Analysis ready.');
   } catch(error) {
     if(controller.signal.aborted) { if(controller.signal.reason==='timeout')formError('The service took longer than ten minutes. It may still be processing. Try a shorter recording later.'); }
     else formError(error.message);
@@ -418,13 +360,12 @@ async function loadSample() {
     const response=await fetch('./sample.json');
     if(!response.ok)throw new Error('Sample unavailable');
     const raw=await response.json();
-    const recording={...normalizeAnalysis(raw),id:'sample',name:'A call to a generation',sample:true,audioUrl:'./assets/jfk.flac',createdAt:null};
+    const recording={...normalizeAnalysis(raw),id:'sample',name:'JFK inaugural address',sample:true,audioUrl:'./assets/jfk.flac',createdAt:null};
     recordings.push(recording);
     if(!selected)selectRecording(recording);else renderSessions();
   } catch {
-    $('recording-name').textContent='Your next recording';
+    $('recording-name').textContent='Add a recording';
     $('recording-detail').textContent='Upload audio to get started';
-    $('sample-badge').hidden=true;
     notice('The example could not load. You can still upload or record audio to create your own analysis.');
   }
 }

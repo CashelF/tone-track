@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeAnalysis, transcriptSegments, segmentAt, toCsv, validateFile, escapeHtml, formatTime} from '../docs/model.js';
+import {normalizeAnalysis, transcriptSegments, segmentAt, toCsv, validateFile, escapeHtml, formatTime, requestAnalysis} from '../docs/model.js';
 
 const response = status => ({status, chunks_csv_data:[
   {start_time:'0',end_time:'3',valence:'0.2',arousal:'0.7',dominance:'0.6',transcript:'A beginning'},
@@ -42,4 +42,8 @@ test('file validation accepts browser recordings and rejects invalid or oversize
 test('untrusted text is escaped and time formatting handles invalid inputs',()=>{
   assert.equal(escapeHtml('<img src=x onerror="alert(1)">'),'&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
   assert.equal(formatTime(61.9),'1:01');assert.equal(formatTime(-4),'0:00');assert.equal(formatTime(NaN),'0:00');
+});
+test('invalid audio has a useful error without exposing server internals',async t=>{
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({code:'invalid_audio',error:'/private/server/path'}), {status:422}));
+  await assert.rejects(requestAnalysis('/process_and_analyze_audio',new FormData()), /could not be decoded.*WAV or MP3/);
 });

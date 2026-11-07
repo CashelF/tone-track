@@ -3,89 +3,111 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#f7f8f5">
-  <meta name="description" content="Listen a little closer. Explore the emotional arc of a recording with interactive audio, emotion timelines, and transcripts.">
-  <meta property="og:title" content="Tone Track — Listen a little closer">
-  <meta property="og:description" content="An audio workspace for exploring how a voice changes over time.">
-  <title>Tone Track — Listen a little closer</title>
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Analyze a recording's tone, listen to its timeline, and read the transcript.">
+  <meta property="og:title" content="Tone Track">
+  <meta property="og:description" content="Audio, emotion, and transcript in one place.">
+  <title>Tone Track</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css">
-  <script type="module" src="./app.js"></script>
+  <link rel="stylesheet" href="./styles.css?v=20261107">
+  <script type="module" src="./app.js?v=20261107"></script>
 </head>
 <body>
 <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
-  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 10v4m5-9v14m5-11v8m5-13v18m4-12v6"/></symbol>
-  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M7 17 17 7M6 7h11v11"/></symbol>
-  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></symbol>
-  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
-  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
-  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4ZM20 2v4m-2-2h4"/></symbol>
-  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.1"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
-  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="M5 9a8 8 0 1 1-1 7M5 3v6h6"/><text x="10" y="16" stroke="none" fill="currentColor" font-size="8" font-family="sans-serif">5</text></symbol>
-  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1 3 4 3 4-3 4-3M8 9h.1m7.9 0h.1"/></symbol>
-  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 10-13h-7Z"/></symbol>
-  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></symbol>
-  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H5a1 1 0 0 0-1 1v18a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8ZM14 2v6h6M8 13h8m-8 4h5"/></symbol>
 </defs></svg>
-<a class="skip-link" href="#workspace">Skip to workspace</a>
-<aside class="sidebar" aria-label="Workspace navigation">
-  <a class="brand" href="./"><span class="brand-mark"><svg class="icon"><use href="#i-wave"/></svg></span><span>tone<span class="brand-light">track</span><span class="brand-dot">.</span></span></a>
-  <div class="sidebar-topline">A STUDIO FOR YOUR VOICE</div>
-  <nav class="nav">
-    <a href="#workspace" class="nav-item active"><svg class="icon"><use href="#i-grid"/></svg>Workspace<span class="nav-dot"></span></a>
-    <button class="nav-item" data-action="about"><svg class="icon"><use href="#i-info"/></svg>How it works</button>
-  </nav>
-  <div class="session-heading"><span>RECORDINGS</span><span id="session-count">01</span></div>
-  <div id="sessions" class="sessions" aria-label="Recordings"></div>
-  <button class="add-recording" data-action="upload"><svg class="icon"><use href="#i-plus"/></svg>Add a recording</button>
-  <div class="sidebar-bottom">
-    <div class="small-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <p>There’s more in a voice<br>than the words.</p>
-    <a href="https://github.com/CashelF/tone-track" target="_blank" rel="noopener">An experiment by Cashel<svg class="icon"><use href="#i-arrow"/></svg></a>
+<a class="skip-link" href="#workspace">Skip to recording</a>
+<header class="site-header">
+  <a class="brand" href="./">Tone Track</a>
+  <div class="header-actions">
+    <button class="text-button" data-action="about">About</button>
+    <button class="button primary" data-action="upload">Add recording</button>
   </div>
-</aside>
-<div class="main-shell">
-  <header class="topbar"><div class="breadcrumb">Workspace<span>/</span><strong>Audio analysis</strong></div><button class="text-button" data-action="about">Behind the analysis<svg class="icon"><use href="#i-arrow"/></svg></button></header>
-  <main id="workspace" tabindex="-1">
-    <section class="intro">
-      <div><div class="eyebrow"><span class="green-dot"></span>HEAR THE WHOLE PICTURE</div><h1>Listen a little closer.</h1><p>Explore the emotion behind every word.</p></div>
-      <div class="intro-actions"><button class="button secondary" data-action="record"><svg class="icon"><use href="#i-mic"/></svg>Record</button><button class="button primary" data-action="upload"><svg class="icon"><use href="#i-plus"/></svg>New analysis</button></div>
-    </section>
-    <div id="notice" class="notice" role="status" hidden></div>
-    <section class="recording-header" aria-label="Current recording">
-      <div class="recording-title"><span class="recording-icon"><svg class="icon"><use href="#i-wave"/></svg></span><div><div class="title-row"><h2 id="recording-name">Loading sample recording…</h2><span id="sample-badge" class="tag">SAMPLE</span></div><div class="recording-meta"><span id="recording-duration">—</span><span class="meta-dot">·</span><span id="recording-detail">A real recording. A closer look.</span></div></div></div>
-      <div class="recording-actions"><button id="overview-button" class="text-button" disabled><svg class="icon"><use href="#i-spark"/></svg>Session overview</button><button id="export-button" class="button secondary small" disabled><svg class="icon"><use href="#i-download"/></svg>Export</button></div>
-    </section>
-    <section class="metrics" aria-label="Average emotion scores">
-      <article class="metric valence"><div class="metric-label"><span><i></i>Valence</span><svg class="icon"><use href="#i-smile"/></svg></div><div class="metric-main"><strong id="valence-score">—</strong><span id="valence-label">Session average</span><svg id="valence-spark" class="sparkline" viewBox="0 0 132 40" aria-hidden="true"></svg></div><div class="metric-description">The positive or negative tone<span>0–1</span></div></article>
-      <article class="metric arousal"><div class="metric-label"><span><i></i>Arousal</span><svg class="icon"><use href="#i-bolt"/></svg></div><div class="metric-main"><strong id="arousal-score">—</strong><span id="arousal-label">Session average</span><svg id="arousal-spark" class="sparkline" viewBox="0 0 132 40" aria-hidden="true"></svg></div><div class="metric-description">The energy in the voice<span>0–1</span></div></article>
-      <article class="metric dominance"><div class="metric-label"><span><i></i>Dominance</span><svg class="icon"><use href="#i-target"/></svg></div><div class="metric-main"><strong id="dominance-score">—</strong><span id="dominance-label">Session average</span><svg id="dominance-spark" class="sparkline" viewBox="0 0 132 40" aria-hidden="true"></svg></div><div class="metric-description">The assertiveness of the delivery<span>0–1</span></div></article>
-    </section>
-    <section class="panel timeline-panel" aria-labelledby="timeline-title">
-      <div class="panel-heading"><div><h2 id="timeline-title">The emotional arc<span class="heading-dot">.</span></h2><p>Different dimensions. One conversation.</p></div><div class="chart-legend" aria-label="Visible chart dimensions"><button class="legend valence" data-series="valence" aria-pressed="true"><i></i>Valence</button><button class="legend arousal" data-series="arousal" aria-pressed="true"><i></i>Arousal</button><button class="legend dominance" data-series="dominance" aria-pressed="true"><i></i>Dominance</button></div></div>
-      <div class="chart-wrap"><svg id="emotion-chart" viewBox="0 0 960 230" preserveAspectRatio="none" role="img" aria-labelledby="chart-title chart-description"><title id="chart-title">Emotion scores over time</title><desc id="chart-description">Use the audio position slider below to explore the recording. Scores are also available in the transcript and exported CSV.</desc></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div>
-      <div class="chart-caption"><span><span class="live-dot"></span><span id="current-moment">Loading timeline</span></span><span>Click the chart to explore a moment</span></div>
-      <div class="player"><button id="play-button" class="play-button" aria-label="Play recording" disabled><svg class="icon"><use href="#i-play"/></svg></button><button id="rewind-button" class="icon-button" aria-label="Rewind 5 seconds" disabled><svg class="icon"><use href="#i-back"/></svg></button><div class="waveform-container"><canvas id="waveform" aria-hidden="true"></canvas><input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Audio position" disabled></div><div class="timecode"><span id="elapsed">0:00</span><span>/</span><span id="total-time">0:00</span></div><button id="speed-button" class="speed-button" aria-label="Playback speed 1 times" disabled>1×</button><audio id="audio" preload="metadata"></audio></div>
-    </section>
-    <div class="details-grid">
-      <section class="panel transcript-panel" aria-labelledby="transcript-title"><div class="panel-heading"><div><h2 id="transcript-title">In their words</h2><p>Follow along, one moment at a time.</p></div><span class="subtle-icon"><svg class="icon"><use href="#i-file"/></svg></span></div><div id="transcript" class="transcript"><p class="empty-copy">The transcript will appear here.</p></div><div class="panel-footnote"><span class="green-dot"></span>Click a passage to jump to the audio.</div></section>
-      <section class="panel insights-panel" aria-labelledby="insights-title"><div class="panel-heading"><div><div class="insights-kicker"><svg class="icon"><use href="#i-spark"/></svg>A SECOND LISTEN</div><h2 id="insights-title">What stands out</h2></div><span id="insight-badge" class="tag neutral">OBSERVATIONS</span></div><div id="insights" class="insights"><p class="empty-copy">Insights will appear once the recording is ready.</p></div><div class="insight-footer">A lens for listening, not a label for a person.</div></section>
+</header>
+<main id="workspace" tabindex="-1">
+  <div id="notice" class="notice" role="status" hidden></div>
+  <section class="recording-header" aria-label="Current recording">
+    <div class="recording-title">
+      <select id="recordings" aria-label="Select recording" hidden></select>
+      <h1 id="recording-name">Loading recording…</h1>
+      <p id="recording-detail" class="recording-meta"></p>
     </div>
-    <footer class="workspace-footer"><span>Made for curious ears.</span><button class="text-button" data-action="about">About these scores<svg class="icon"><use href="#i-arrow"/></svg></button></footer>
-  </main>
-</div>
-<dialog id="upload-dialog" aria-labelledby="upload-title"><form id="upload-form"><div class="dialog-top"><span class="dialog-icon"><svg class="icon"><use href="#i-wave"/></svg></span><button class="icon-button" type="button" data-close="upload-dialog" aria-label="Close new analysis"><svg class="icon"><use href="#i-close"/></svg></button></div><h2 id="upload-title">A new perspective.</h2><p class="dialog-intro">Bring a recording. Find the moments that matter.</p><div class="input-tabs"><button type="button" class="selected" id="upload-tab" aria-pressed="true"><svg class="icon"><use href="#i-upload"/></svg>Upload audio</button><button type="button" id="record-tab" aria-pressed="false"><svg class="icon"><use href="#i-mic"/></svg>Record your voice</button></div><label class="field-label" for="recording-label">Recording name</label><input class="text-input" id="recording-label" maxlength="100" placeholder="A conversation worth listening to" autocomplete="off"><div id="upload-mode"><input id="file-input" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.webm" class="visually-hidden"><button id="drop-zone" class="drop-zone" type="button"><svg class="icon"><use href="#i-upload"/></svg><strong id="file-label">Drop a recording here</strong><span id="file-detail">or click to browse · up to 50 MB</span></button></div><div id="record-mode" hidden><button id="record-toggle" class="record-toggle" type="button"><span class="record-dot"></span><span id="record-label">Start recording</span><span id="record-time">0:00</span></button><p class="microphone-note">Your microphone is only active while recording.</p></div><audio id="audio-preview" controls hidden></audio><p class="privacy-note">Audio is processed and stored on the analysis server. Transcripts and scores are sent to Google for AI notes. This workspace resets when you reload; export results to keep them.</p><div id="upload-error" class="form-error" role="alert" hidden></div><div id="processing" class="processing" role="status" hidden><span class="spinner"></span><div><strong id="processing-title">Listening closely…</strong><p id="processing-detail">Transcribing and mapping the emotional arc. This can take a few minutes.</p></div></div><div class="dialog-actions"><button id="cancel-upload" class="button secondary" type="button" data-close="upload-dialog">Cancel</button><button id="analyze-button" class="button primary" type="submit" disabled>Analyze recording<svg class="icon"><use href="#i-arrow"/></svg></button></div></form></dialog>
-<dialog id="about-dialog" aria-labelledby="about-title"><div class="dialog-top"><span class="dialog-icon"><svg class="icon"><use href="#i-info"/></svg></span><button class="icon-button" data-close="about-dialog" aria-label="Close about"><svg class="icon"><use href="#i-close"/></svg></button></div><h2 id="about-title">Beyond the words.</h2><p class="dialog-intro">Tone Track turns a recording into a timeline you can listen to, read, and explore.</p><div class="about-steps"><article><span>01</span><div><h3>Bring your audio</h3><p>Upload a file or record a short clip. The service transcribes the speech and analyzes overlapping audio windows.</p></div></article><article><span>02</span><div><h3>Explore three dimensions</h3><p><b>Valence</b> estimates positivity, <b>arousal</b> estimates energy, and <b>dominance</b> estimates assertiveness. Higher values mean more of that dimension, not better performance.</p></div></article><article><span>03</span><div><h3>Listen with context</h3><p>Scores are model estimates, not facts about someone’s feelings. Accents, background noise, and context affect the results. AI notes can be wrong; the audio is your reference.</p></div></article></div><p class="about-tech">Emotion: wav2vec2 · Transcription: Whisper · AI notes: Gemini. Website on GitHub Pages; processing on Hugging Face.</p><p class="about-tech" id="sample-credit">Sample: John F. Kennedy’s 1961 inaugural address (public domain), via OpenAI’s Whisper test audio. Sample scores are precomputed by Tone Track.</p><a class="button secondary" href="https://github.com/CashelF/tone-track" target="_blank" rel="noopener">Explore the source<svg class="icon"><use href="#i-arrow"/></svg></a></dialog>
-<dialog id="export-dialog" aria-labelledby="export-title"><div class="dialog-top"><span class="dialog-icon"><svg class="icon"><use href="#i-download"/></svg></span><button class="icon-button" data-close="export-dialog" aria-label="Close export"><svg class="icon"><use href="#i-close"/></svg></button></div><h2 id="export-title">Keep a closer look.</h2><p class="dialog-intro">Download the selected recording’s results.</p><button class="export-option" id="export-csv"><span><strong>Emotion timeline</strong><small>Timestamps, scores, and transcript · CSV</small></span><svg class="icon"><use href="#i-download"/></svg></button><button class="export-option" id="export-json"><span><strong>Complete analysis</strong><small>Scores, transcript, and notes · JSON</small></span><svg class="icon"><use href="#i-download"/></svg></button></dialog>
-<dialog id="overview-dialog" aria-labelledby="overview-title"><div class="dialog-top"><span class="dialog-icon"><svg class="icon"><use href="#i-spark"/></svg></span><button class="icon-button" data-close="overview-dialog" aria-label="Close overview"><svg class="icon"><use href="#i-close"/></svg></button></div><h2 id="overview-title">The bigger picture.</h2><p class="dialog-intro">AI observations across the analyzed recordings in this session. The sample is excluded.</p><div id="overview-content" class="prose" role="status"></div><button class="button primary" id="overview-retry" hidden>Try again</button></dialog>
+    <div class="recording-actions">
+      <button id="overview-button" class="text-button" hidden>Overview</button>
+      <button id="export-button" class="button secondary" disabled>Export</button>
+    </div>
+  </section>
+  <div class="player">
+    <button id="play-button" class="play-button" aria-label="Play recording" disabled><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
+    <input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Audio position" disabled>
+    <div class="timecode"><span id="elapsed">0:00</span><span>/</span><span id="total-time">0:00</span></div>
+    <button id="speed-button" class="speed-button" aria-label="Playback speed 1 times" disabled>1×</button>
+    <audio id="audio" preload="metadata"></audio>
+  </div>
+  <section class="timeline" aria-labelledby="timeline-title">
+    <div class="section-heading">
+      <h2 id="timeline-title">Timeline</h2>
+      <div class="chart-legend" aria-label="Visible dimensions and average scores">
+        <button class="legend valence" data-series="valence" aria-pressed="true" title="Average valence: positivity"><i aria-hidden="true"></i>Valence <span id="valence-score">—</span></button>
+        <button class="legend arousal" data-series="arousal" aria-pressed="true" title="Average arousal: energy"><i aria-hidden="true"></i>Arousal <span id="arousal-score">—</span></button>
+        <button class="legend dominance" data-series="dominance" aria-pressed="true" title="Average dominance: assertiveness"><i aria-hidden="true"></i>Dominance <span id="dominance-score">—</span></button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <svg id="emotion-chart" viewBox="0 0 960 230" preserveAspectRatio="none" role="img" aria-labelledby="chart-title chart-description"><title id="chart-title">Emotion scores over time</title><desc id="chart-description">Use the audio position slider to explore the recording.</desc></svg>
+      <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+    </div>
+  </section>
+  <section class="transcript-section" aria-labelledby="transcript-title">
+    <div class="section-heading"><h2 id="transcript-title">Transcript</h2></div>
+    <div id="transcript" class="transcript"><p class="empty-copy">Loading transcript…</p></div>
+  </section>
+  <section id="insights-section" class="notes-section" aria-labelledby="insights-title" hidden>
+    <div class="section-heading"><h2 id="insights-title">AI notes</h2></div>
+    <div id="insights" class="prose"></div>
+  </section>
+</main>
+<dialog id="upload-dialog" aria-labelledby="upload-title">
+  <form id="upload-form">
+    <div class="dialog-heading"><h2 id="upload-title">Add recording</h2><button class="icon-button" type="button" data-close="upload-dialog" aria-label="Close upload"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="input-tabs"><button type="button" class="selected" id="upload-tab" aria-pressed="true">Upload</button><button type="button" id="record-tab" aria-pressed="false">Record</button></div>
+    <label class="field-label" for="recording-label">Name</label>
+    <input class="text-input" id="recording-label" maxlength="100" placeholder="Recording name" autocomplete="off">
+    <div id="upload-mode">
+      <input id="file-input" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.webm" class="visually-hidden">
+      <button id="drop-zone" class="drop-zone" type="button"><strong id="file-label">Choose audio or drop a file</strong><span id="file-detail">Up to 50 MB</span></button>
+    </div>
+    <div id="record-mode" hidden><button id="record-toggle" class="record-toggle" type="button"><span class="record-dot" aria-hidden="true"></span><span id="record-label">Start recording</span><span id="record-time">0:00</span></button></div>
+    <audio id="audio-preview" controls hidden></audio>
+    <details class="privacy-note"><summary>Storage and privacy</summary><p>Audio is processed and stored on the analysis server. When AI notes are available, transcripts and scores are sent to Google. Export results to keep them; this workspace resets when you reload.</p></details>
+    <div id="upload-error" class="form-error" role="alert" hidden></div>
+    <div id="processing" class="processing" role="status" hidden><span class="spinner" aria-hidden="true"></span><div><strong id="processing-title">Analyzing…</strong><p id="processing-detail">This may take a few minutes.</p></div></div>
+    <div class="dialog-actions"><button id="cancel-upload" class="button secondary" type="button" data-close="upload-dialog">Cancel</button><button id="analyze-button" class="button primary" type="submit" disabled>Analyze</button></div>
+  </form>
+</dialog>
+<dialog id="about-dialog" aria-labelledby="about-title">
+  <div class="dialog-heading"><h2 id="about-title">About Tone Track</h2><button class="icon-button" data-close="about-dialog" aria-label="Close about"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+  <div class="prose">
+    <p>Upload audio or record your voice to get a transcript and a timeline of three estimates:</p>
+    <dl><dt>Valence</dt><dd>Positive or negative tone.</dd><dt>Arousal</dt><dd>Energy in the voice.</dd><dt>Dominance</dt><dd>Assertiveness of the delivery.</dd></dl>
+    <p>Scores run from 0 to 1. The numbers beside the timeline legend are averages. Click the chart or transcript to seek; click a legend label to hide a line.</p>
+    <p>These are model estimates, not facts about someone’s feelings. Context, accents, and background noise affect the results. AI notes appear when available.</p>
+    <p>Sample: John F. Kennedy’s 1961 inaugural address, public domain.</p>
+    <a href="https://github.com/CashelF/tone-track" target="_blank" rel="noopener">Source code</a>
+  </div>
+</dialog>
+<dialog id="export-dialog" aria-labelledby="export-title">
+  <div class="dialog-heading"><h2 id="export-title">Export analysis</h2><button class="icon-button" data-close="export-dialog" aria-label="Close export"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+  <button class="export-option" id="export-csv"><strong>CSV</strong><span>Timeline scores and transcript</span></button>
+  <button class="export-option" id="export-json"><strong>JSON</strong><span>Complete analysis</span></button>
+</dialog>
+<dialog id="overview-dialog" aria-labelledby="overview-title">
+  <div class="dialog-heading"><h2 id="overview-title">Recordings overview</h2><button class="icon-button" data-close="overview-dialog" aria-label="Close overview"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+  <div id="overview-content" class="prose" role="status"></div><button class="button primary" id="overview-retry" hidden>Try again</button>
+</dialog>
 <div id="toast" class="toast" role="status" hidden></div>
-<noscript><p class="no-script">Tone Track needs JavaScript to play audio and display analysis. Enable JavaScript to use the workspace.</p></noscript>
+<noscript><p class="no-script">Enable JavaScript to use Tone Track.</p></noscript>
 </body>
 </html>
